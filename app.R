@@ -8,6 +8,7 @@
 #
 
 library(shiny)
+library(dplyr)
 
 data(fips_codes, package = "tigris")
 
