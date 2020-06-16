@@ -57,23 +57,3 @@ get_data <- function(state_code, state){
 for (i in 1:nrow(states)){
   get_data(state_code = states$state_code[i], state = states$state[i])
 }
-
-
-
-
-#cols <- colorQuantile(palette= "viridis", domain = NULL)
-
-library(leaflet)
-cols <- colorFactor(palette = "viridis", domain = NULL, reverse = TRUE)
-print(leaflet(data = data_all) %>%
-        #addTiles() %>%
-        addProviderTiles(providers$OpenStreetMap) %>%
-        addCircleMarkers(~dec_long_va, ~dec_lat_va,
-                         color = cols(data_all$class), radius = 5, stroke = FALSE,
-                         fillOpacity = 0.8, opacity = 0.8,
-                         popup = paste("Station num:", data_all$site_no, "<br>",
-                                       "Station name:", data_all$station_nm, "<br>",
-                                       "RBI:", round(data_all$RB, 2), "<br>",
-                                       "years:", round(data_all$years))))
-
-write.csv(RBI, "Z:/Public/NHCRP Project 24-40/Flashiness/PNW Flashiness Data.csv", row.names = FALSE)
