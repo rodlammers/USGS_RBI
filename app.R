@@ -145,18 +145,22 @@ server <- function(input, output) {
         filter(RB > 0)
     
     data_map <- eventReactive(c(input$DA_range, input$RBI_range, input$DA_NA), {
-        data <- filter(data_all, drain_area_va >= as.numeric(input$DA_range[1]) | is.na(drain_area_va), 
-               drain_area_va <= as.numeric(input$DA_range[2]) | is.na(drain_area_va), 
-               RB >= input$RBI_range[1], RB <= input$RBI_range[2])
         
-        if (!input$DA_NA){
-           data <- filter(data, !is.na(drain_area_va)) 
+        if (input$DA_NA){
+            data <- filter(data_all, drain_area_va >= as.numeric(input$DA_range[1]) | is.na(drain_area_va), 
+                   drain_area_va <= as.numeric(input$DA_range[2]) | is.na(drain_area_va), 
+                   RB >= input$RBI_range[1], RB <= input$RBI_range[2])
+        }
+        else if (!input$DA_NA){
+            data <- filter(data_all, drain_area_va >= as.numeric(input$DA_range[1]), 
+                           drain_area_va <= as.numeric(input$DA_range[2]), 
+                           RB >= input$RBI_range[1], RB <= input$RBI_range[2])
         }
         
         return(data)
     })
 
-    cols <- eventReactive(c(input$map_type, input$DA_range, input$RBI_range), {
+    cols <- eventReactive(c(input$map_type, input$DA_range, input$RBI_range, input$DA_NA), {
         if (input$map_type == "Categories"){
             col_fun <- leaflet::colorFactor(palette = "viridis", domain = NULL, reverse = TRUE)
             col <- col_fun(data_map()$class)
