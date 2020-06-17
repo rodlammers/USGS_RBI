@@ -3,7 +3,7 @@ library(dplyr)
 library(leaflet)
 library(purrr)
 
-get_gages <- function(state, DA_min, DA_max, record_length_min, startDate, endDate){
+get_gages <- function(state, DA_min, DA_max, record_length_min, startDate, endDate, iv = FALSE){
   gages <- readNWISdata(parameterCd = "00060", stateCd = state, drainAreaMin = DA_min,
                         drainAreaMax = DA_max, service = "site", seriesCatalogOutput = TRUE) %>%
     filter(parm_cd == "00060",
@@ -14,10 +14,25 @@ get_gages <- function(state, DA_min, DA_max, record_length_min, startDate, endDa
     filter(period >= record_length_min) %>%
     filter(as.Date(end_date) >= as.Date(startDate),
            as.Date(begin_date) <= as.Date(endDate))
+  
+  #if (iv){
+    gages_inst <- readNWISdata(parameterCd = "00060", stateCd = state, drainAreaMin = DA_min,
+                          drainAreaMax = DA_max, service = "site", seriesCatalogOutput = TRUE) %>%
+      filter(parm_cd == "00060",
+             data_type_cd == "uv",
+             is.na(loc_web_ds)) %>%
+      mutate(Instant = "Yes") %>%
+      select(site_no, Instant)
+    
+    gages <- left_join(gages, gages_inst, by = "site_no") %>%
+      mutate(Instant = if_else(is.na(Instant), "No", Instant))
+  #}
+  
+  return(gages)
 }
 
 find_gages <- function(state = NULL, DA_min = 0, DA_max = 1e9, record_length_min = 0, startDate = "1800-01-01",
-                       endDate = "2100-01-01"){
+                       endDate = "2100-01-01", iv = FALSE){
   
   if (is.null(state)){
     state <- state.abb
@@ -26,7 +41,7 @@ find_gages <- function(state = NULL, DA_min = 0, DA_max = 1e9, record_length_min
   if (is.na(DA_max)){DA_max <- 1e9}
   
   get_gages2 <- possibly(get_gages, NULL)
-  gages <- lapply(state, get_gages2, DA_min, DA_max, record_length_min, startDate, endDate)
+  gages <- lapply(state, get_gages2, DA_min, DA_max, record_length_min, startDate, endDate, iv)
   gages <- do.call("rbind", gages)
   
   if (is.null(gages)){

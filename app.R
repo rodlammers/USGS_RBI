@@ -57,21 +57,29 @@ ui <- fluidPage(
                                  "Min. record length [years]",
                                  0),
                     
+                    checkboxInput("inst_data",
+                                  "Has 15-min data"),
+                    
                     actionButton("run_gages",
-                                 "Find Gages")
+                                 "Find Gages"),
+                    
+                    width = 3
                 ),
         
                 # Show a plot of the generated distribution
                 mainPanel(
-                    leafletOutput("Gage_map", width = "100%", height = 700)
+                    leafletOutput("Gage_map", width = "100%", height = 600),
+                    
+                    dataTableOutput("gage_table")
                 )
             )
         ),
         
         tabPanel("Flashiness",
-                 h4("This map shows flashiness data (computed using the Richards-Baker Flashiness Index) for USGS stream gages
+                 h4("This map shows flashiness data (computed using the", a(href="https://doi.org/10.1111/j.1752-1688.2004.tb01046.x", target="_blank", "Richards-Baker Flashiness Index"), 
+                 "- or RBI) for USGS stream gages
                     using daily data from 2010-2019. Gages can be displayed by category (Low <= 0.2, 0.2 < Med <= 0.5, High > 0.5)
-                    or by raw value. Note that some very high values of RBI are associated with tidal rivers that may have both positive
+                    or by raw value. Note that some very high values of RBI are associated with tidal rivers and diversion channels that may have both positive
                     and negative discharges."),
                  
                  br(),
@@ -97,17 +105,24 @@ ui <- fluidPage(
                                                        grid = TRUE,
                                                        selected = c(0, 1200000)),
                          
+                         checkboxInput("DA_NA",
+                                       "Include gages with unknown drainage areas?",
+                                       value = TRUE),
+                         
                          radioButtons("map_type",
                                       "Map display",
                                       choices = c("Categories",
-                                                  "Values"))
+                                                  "Values")),
+                         
+
+                         width = 3
                          
                          #plotOutput("legend")
                          
                      ),
                      
                      mainPanel(
-                         leafletOutput("RBI_map", width = "100%", height = 700)
+                         leafletOutput("RBI_map", width = "100%", height = 600)
                      )
                  )
                  )
@@ -125,13 +140,20 @@ server <- function(input, output) {
     data_all <- do.call("rbind", data) %>%
         mutate(site_no = as.character(site_no)) %>%
         rowwise() %>%
-        mutate(site_no = if_else(nchar(site_no) == 7, paste0(0, site_no), site_no)) %>%
+        mutate(site_no = if_else(nchar(site_no) == 7, paste0(0, site_no), site_no),
+               class = factor(class, levels = c("High", "Med", "Low"))) %>%
         filter(RB > 0)
     
-    data_map <- eventReactive(c(input$DA_range, input$RBI_range), {
-        filter(data_all, drain_area_va >= as.numeric(input$DA_range[1]), drain_area_va <= as.numeric(input$DA_range[2]), 
+    data_map <- eventReactive(c(input$DA_range, input$RBI_range, input$DA_NA), {
+        data <- filter(data_all, drain_area_va >= as.numeric(input$DA_range[1]) | is.na(drain_area_va), 
+               drain_area_va <= as.numeric(input$DA_range[2]) | is.na(drain_area_va), 
                RB >= input$RBI_range[1], RB <= input$RBI_range[2])
-        #cbind(input$RBI_range[1], input$RBI_range[2])
+        
+        if (!input$DA_NA){
+           data <- filter(data, !is.na(drain_area_va)) 
+        }
+        
+        return(data)
     })
 
     cols <- eventReactive(c(input$map_type, input$DA_range, input$RBI_range), {
@@ -139,10 +161,10 @@ server <- function(input, output) {
             col_fun <- leaflet::colorFactor(palette = "viridis", domain = NULL, reverse = TRUE)
             col <- col_fun(data_map()$class)
         }else if (input$map_type == "Values"){
-            vals <- cut(data_map()$RB, breaks = c(seq(0, 0.5, 0.1), 0.75, 1, 1.5, 2, 4, 8), labels = c(seq(0.1, 0.5, 0.1), 0.75, 1, 1.5, 2, 4, 8),
+            vals <- cut(data_map()$RB, breaks = c(seq(0, 0.5, 0.1), 0.75, 1, 1.5, 2, 8), labels = c(seq(0.1, 0.5, 0.1), 0.75, 1, 1.5, 2, 8),
                         ordered_result = TRUE)
             #levels(vals) <-  c(seq(0, 0.5, 0.1), 0.75, 1, 1.5, 2, 4, 8)
-            col_fun <- leaflet::colorFactor(palette = "viridis", domain = as.character(c(seq(0.1, 0.5, 0.1), 0.75, 1, 1.5, 2, 4, 8)))
+            col_fun <- leaflet::colorFactor(palette = "viridis", domain = as.character(c(seq(0.1, 0.5, 0.1), 0.75, 1, 1.5, 2, 8)))
             col <- col_fun(vals)
         }
         return(list(col, col_fun))
@@ -150,9 +172,9 @@ server <- function(input, output) {
     
     legend_vals <- eventReactive(input$map_type, {
         if (input$map_type == "Categories"){
-            legend <- c("High", "Med", "Low")
+            legend <- factor(c("High", "Med", "Low"), levels = c("High", "Med", "Low"))
         }else if (input$map_type == "Values"){
-            legend <- as.character(c(seq(0.1, 0.5, 0.1), 0.75, 1, 1.5, 2, 4, 8))
+            legend <- as.character(c(seq(0.1, 0.5, 0.1), 0.75, 1, 1.5, 2, 8))
             #legend <- 1:11
         }
 
@@ -178,9 +200,12 @@ server <- function(input, output) {
     
     gages <- eventReactive(input$run_gages, {
         gage_data <- find_gages(state = input$state_nm, DA_min = input$DA_min, DA_max = input$DA_max, record_length_min = input$length_min,
-                   startDate = input$date_rng[1], endDate = input$date_rng[2])
+                   startDate = input$date_rng[1], endDate = input$date_rng[2], iv = input$inst_data)
         validate(need(!is.character(gage_data), "There are no gages that match the provided criteria."))
         
+        if (input$inst_data){
+            gage_data <- filter(gage_data, Instant == "Yes")
+        }
         return(gage_data)
     })
     
@@ -195,9 +220,17 @@ server <- function(input, output) {
                                            "Record (yr):", round(gages()$period, 1), "<br>",
                                            "Start Date:", gages()$begin_date, "<br>",
                                            "End Date:", gages()$end_date, "<br>",
-                                           "Drainage Area (mi2):", gages()$drain_area_va))
+                                           "Drainage Area (mi2):", gages()$drain_area_va, "<br>",
+                                            "15-min data?:", gages()$Instant))
 
     })
+    
+    output$gage_table <- renderDataTable(
+        gages() %>%
+            select(site_no, "name" = station_nm, "n_year" = period, begin_date, end_date, "drain_area_mi2" = drain_area_va,
+                   "15-min_data" = Instant) %>%
+            mutate(n_year = as.numeric(round(n_year, 1)))
+    )
     # observeEvent(input$map_type, {
     #     output$legend <- renderPlot({
     #         plot.new()
