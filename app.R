@@ -63,6 +63,12 @@ ui <- fluidPage(
                     actionButton("run_gages",
                                  "Find Gages"),
                     
+                    br(),
+                    
+                    br(),
+                    
+                    h4(a(href = "https://github.com/rodlammers/USGS_RBI", target="_blank", "Code"), "created by Rod Lammers (rodlammers@gmail.com)."),
+                    
                     width = 3
                 ),
         
@@ -71,6 +77,7 @@ ui <- fluidPage(
                     leafletOutput("Gage_map", width = "100%", height = 600),
                     
                     dataTableOutput("gage_table")
+                    
                 )
             )
         ),
@@ -113,6 +120,12 @@ ui <- fluidPage(
                                       "Map display",
                                       choices = c("Categories",
                                                   "Values")),
+                         
+                         br(),
+                         
+                         br(),
+                         
+                         h4(a(href = "https://github.com/rodlammers/USGS_RBI", target="_blank", "Code"), "created by Rod Lammers (rodlammers@gmail.com)."),
                          
 
                          width = 3
