@@ -202,7 +202,7 @@ server <- function(input, output) {
         }
         
         data <- left_join(data, GAGES_urb, by = c("site_no" = "STAID"))
-        if (diff(range(input$urban_range)) != 100){
+        if (diff(range(input$urban_range2)) != 100){
             #Only filter gages if urbanization range not adjusted
             data <- filter(data, DEV >= input$urban_range2[1], DEV <= input$urban_range2[2])            
             
