@@ -9,6 +9,7 @@
 
 library(shiny)
 library(dplyr)
+library(shinycssloaders)
 
 data(fips_codes, package = "tigris")
 
@@ -43,19 +44,27 @@ ui <- fluidPage(
                                 choices = states$state),
                     
                     dateRangeInput("date_rng",
-                                   "Date Range"),
+                                   "Date Range",
+                                   start = "1900-01-01"),
                     
                     numericInput("DA_min",
-                                 "Min. Drainage Area [mi2]",
+                                 "Min. Drainage Area [sq. mi]",
                                  0),
                     
                     numericInput("DA_max",
-                                 "Max Drainage Area [mi2]",
+                                 "Max Drainage Area [sq. mi]",
                                  NA),
                     
                     numericInput("length_min",
                                  "Min. record length [years]",
                                  0),
+                    
+                    sliderInput("urban_range",
+                                "Range of % urbanization*",
+                                min = 0,
+                                max = 100,
+                                value = c(0, 100),
+                                step = 1),
                     
                     checkboxInput("inst_data",
                                   "Has 15-min data"),
@@ -68,13 +77,17 @@ ui <- fluidPage(
                     br(),
                     
                     h4(a(href = "https://github.com/rodlammers/USGS_RBI", target="_blank", "Code"), "created by Rod Lammers (rodlammers@gmail.com)."),
+
+                    br(),
+                    p("*Percent urbanization for watersheds based on 2006 and 2001 (AK, HI, and PR) NLCD data. Annual precipitation data (see table) from 1971-2000 PRISM data. Data from the", a(href = "https://water.usgs.gov/GIS/metadata/usgswrd/XML/gagesII_Sept2011.xml", target = "_blank", "GAGES-II dataset.")),
+                    
                     
                     width = 3
                 ),
         
                 # Show a plot of the generated distribution
                 mainPanel(
-                    leafletOutput("Gage_map", width = "100%", height = 600),
+                    leafletOutput("Gage_map", width = "100%", height = 600) %>% withSpinner(),
                     
                     dataTableOutput("gage_table")
                     
@@ -116,6 +129,13 @@ ui <- fluidPage(
                                        "Include gages with unknown drainage areas?",
                                        value = TRUE),
                          
+                         sliderInput("urban_range2",
+                                     "Range of % urbanization*",
+                                     min = 0,
+                                     max = 100,
+                                     value = c(0, 100),
+                                     step = 1),
+                         
                          radioButtons("map_type",
                                       "Map display",
                                       choices = c("Categories",
@@ -126,8 +146,10 @@ ui <- fluidPage(
                          br(),
                          
                          h4(a(href = "https://github.com/rodlammers/USGS_RBI", target="_blank", "Code"), "created by Rod Lammers (rodlammers@gmail.com)."),
-                         
 
+                         br(),
+                         p("*Percent urbanization for watersheds based on 2006 and 2001 (AK, HI, and PR) NLCD data. Data from the", a(href = "https://water.usgs.gov/GIS/metadata/usgswrd/XML/gagesII_Sept2011.xml", target = "_blank", "GAGES-II dataset.")),
+                         
                          width = 3
                          
                          #plotOutput("legend")
@@ -135,7 +157,7 @@ ui <- fluidPage(
                      ),
                      
                      mainPanel(
-                         leafletOutput("RBI_map", width = "100%", height = 600)
+                         leafletOutput("RBI_map", width = "100%", height = 600) %>% withSpinner()
                      )
                  )
                  )
@@ -157,7 +179,16 @@ server <- function(input, output) {
                class = factor(class, levels = c("High", "Med", "Low"))) %>%
         filter(RB > 0)
     
-    data_map <- eventReactive(c(input$DA_range, input$RBI_range, input$DA_NA), {
+    #GAGES Data
+    GAGES <- lapply(list.files("GAGESII_data", full.names = TRUE), read.csv, colClasses = c("STAID" = "character"))
+    GAGES_comb <- left_join(GAGES[[2]], GAGES[[3]], by = "STAID")
+    GAGES_AK <- GAGES[[1]]
+    
+    #combined urbanization data
+    GAGES_urb <- rbind(select(GAGES_comb, STAID, "DEV" = DEVNLCD06),
+                       select(GAGES_AK, STAID, "DEV" = DEVNLCD01))
+    
+    data_map <- eventReactive(c(input$DA_range, input$RBI_range, input$DA_NA, input$urban_range2), {
         
         if (input$DA_NA){
             data <- filter(data_all, drain_area_va >= as.numeric(input$DA_range[1]) | is.na(drain_area_va), 
@@ -170,10 +201,17 @@ server <- function(input, output) {
                            RB >= input$RBI_range[1], RB <= input$RBI_range[2])
         }
         
+        data <- left_join(data, GAGES_urb, by = c("site_no" = "STAID"))
+        if (diff(range(input$urban_range)) != 100){
+            #Only filter gages if urbanization range not adjusted
+            data <- filter(data, DEV >= input$urban_range2[1], DEV <= input$urban_range2[2])            
+            
+        }
+        
         return(data)
     })
 
-    cols <- eventReactive(c(input$map_type, input$DA_range, input$RBI_range, input$DA_NA), {
+    cols <- eventReactive(c(input$map_type, input$DA_range, input$RBI_range, input$DA_NA, input$urban_range2), {
         if (input$map_type == "Categories"){
             col_fun <- leaflet::colorFactor(palette = "viridis", domain = NULL, reverse = TRUE)
             col <- col_fun(data_map()$class)
@@ -209,12 +247,15 @@ server <- function(input, output) {
                                            "RBI:", round(data_map()$RB, 2), "<br>",
                                            "Category:", data_map()$class, "<br>",
                                            "years:", round(data_map()$years), "<br>",
-                                           "DA [mi2]:", round(data_map()$drain_area_va, 1))) %>%
+                                           "DA [sq. mi]:", round(data_map()$drain_area_va, 1), "<br>",
+                                           "Urban area [%]:", round(data_map()$DEV))) %>%
             addLegend("bottomright", pal = cols()[[2]], values = legend_vals(),
                       title = "RBI",
                       opacity = 0.8)
     })
     
+    ########################
+    #Gage finder
     gages <- eventReactive(input$run_gages, {
         gage_data <- find_gages(state = input$state_nm, DA_min = input$DA_min, DA_max = input$DA_max, record_length_min = input$length_min,
                    startDate = input$date_rng[1], endDate = input$date_rng[2], iv = input$inst_data)
@@ -223,6 +264,24 @@ server <- function(input, output) {
         if (input$inst_data){
             gage_data <- filter(gage_data, Instant == "Yes")
         }
+        
+        #Add gages data
+        if (input$state_nm %in% c("AK","HI","PR")){
+            gage_data <- left_join(gage_data, GAGES_AK, by = c("site_no" = "STAID")) %>%
+                rename("DEV" = DEVNLCD01) %>%
+                mutate(PPTAVG_BASIN = NA)
+        }else {
+            gage_data <- left_join(gage_data, GAGES_comb, by = c("site_no" = "STAID")) %>%
+                rename("DEV" = DEVNLCD06)
+        }
+        
+        if (diff(range(input$urban_range)) != 100){
+            #Only filter gages if urbanization range not adjusted
+            gage_data <- filter(gage_data, DEV >= input$urban_range[1], DEV <= input$urban_range[2])            
+            
+        }
+
+        
         return(gage_data)
     })
     
@@ -234,10 +293,12 @@ server <- function(input, output) {
                              fillOpacity = 0.8, opacity = 0.8,
                              popup = paste("Station num:", gages()$site_no, "<br>",
                                            "Station name:", gages()$station_nm, "<br>",
-                                           "Record (yr):", round(gages()$period, 1), "<br>",
+                                           "Record [yr]:", round(gages()$period, 1), "<br>",
                                            "Start Date:", gages()$begin_date, "<br>",
                                            "End Date:", gages()$end_date, "<br>",
-                                           "Drainage Area (mi2):", gages()$drain_area_va, "<br>",
+                                           "Drainage Area [sq. mi]:", gages()$drain_area_va, "<br>",
+                                           "Urban area [%]:", round(gages()$DEV), "<br>",
+                                           "Annual Precip [in]:", round(gages()$PPTAVG_BASIN / 2.54), "<br>",
                                             "15-min data?:", gages()$Instant))
 
     })
@@ -245,8 +306,9 @@ server <- function(input, output) {
     output$gage_table <- renderDataTable(
         gages() %>%
             select(site_no, "name" = station_nm, "n_year" = period, begin_date, end_date, "drain_area_mi2" = drain_area_va,
-                   "15-min_data" = Instant) %>%
-            mutate(n_year = as.numeric(round(n_year, 1)))
+                   "15-min_data" = Instant, "Urban_%" = DEV, "Annual_precip_in" = PPTAVG_BASIN) %>%
+            mutate(n_year = as.numeric(round(n_year, 1)),
+                   Annual_precip_in = round(Annual_precip_in / 2.54))
     )
     # observeEvent(input$map_type, {
     #     output$legend <- renderPlot({
