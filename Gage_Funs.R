@@ -41,7 +41,14 @@ find_gages <- function(state = NULL, DA_min = 0, DA_max = 1e9, record_length_min
   if (is.na(DA_max)){DA_max <- 1e9}
   
   get_gages2 <- possibly(get_gages, NULL)
-  gages <- get_gages2(state, DA_min, DA_max, record_length_min, startDate, endDate, iv)
+  
+  #Loop through for mulitple states
+  gages <- list()
+  for (i in 1:length(state)){
+    gages[[i]] <- get_gages2(state[i], DA_min, DA_max, record_length_min, startDate, endDate, iv)
+  }
+  gages <- do.call("rbind", gages)
+
   
   if (is.null(gages)){
     

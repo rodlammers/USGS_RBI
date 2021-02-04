@@ -40,8 +40,9 @@ ui <- fluidPage(
             sidebarLayout(
                 sidebarPanel(
                     selectInput("state_nm",
-                                "State",
-                                choices = states$state),
+                                "State (select one or more)",
+                                choices = states$state,
+                                multiple = TRUE),
                     
                     dateRangeInput("date_rng",
                                    "Date Range",
