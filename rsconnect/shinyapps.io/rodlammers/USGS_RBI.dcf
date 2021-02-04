@@ -5,8 +5,8 @@ account: rodlammers
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 2463667
-bundleId: 3316385
+bundleId: 4180574
 url: https://rodlammers.shinyapps.io/USGS_RBI/
-when: 1593107217.61287
+when: 1612448942.25463
 asMultiple: FALSE
 asStatic: FALSE
