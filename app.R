@@ -281,6 +281,10 @@ server <- function(input, output) {
             gage_data <- filter(gage_data, DEV >= input$urban_range[1], DEV <= input$urban_range[2])            
             
         }
+        
+        #Add html link
+        gage_data <- mutate(gage_data,
+                            link = paste0("<a href = https://waterdata.usgs.gov/nwis/dv?site_no=", site_no, "> USGS Site </a>"))
 
         
         return(gage_data)
@@ -300,7 +304,8 @@ server <- function(input, output) {
                                            "Drainage Area [sq. mi]:", gages()$drain_area_va, "<br>",
                                            "Urban area [%]:", round(gages()$DEV), "<br>",
                                            "Annual Precip [in]:", round(gages()$PPTAVG_BASIN / 2.54), "<br>",
-                                            "15-min data?:", gages()$Instant))
+                                            "15-min data?:", gages()$Instant, "<br>",
+                                            "View Data:", gages()$link))
 
     })
     
