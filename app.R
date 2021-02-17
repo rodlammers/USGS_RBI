@@ -284,7 +284,7 @@ server <- function(input, output) {
         
         #Add html link
         gage_data <- mutate(gage_data,
-                            link = paste0("<a href = https://waterdata.usgs.gov/nwis/dv?site_no=", site_no, "> USGS Site </a>"))
+                            link = paste0("<a href = https://waterdata.usgs.gov/nwis/dv?site_no=", site_no, " target=_blank> USGS Site </a>"))
 
         
         return(gage_data)
